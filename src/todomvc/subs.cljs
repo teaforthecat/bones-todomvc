@@ -57,7 +57,10 @@
   ;; X will be the query vector and Y is an advanced feature and out of scope
   ;; for this explanation.
   (fn [query-v _]
-    (subscribe [:sorted-todos]))    ;; returns a single input signal
+    ;; (subscribe [:sorted-todos])
+    (subscribe [:editable :todos])
+
+    )    ;; returns a single input signal
 
   ;; This 2nd fn does the computation. Data values in, derived data out.
   ;; It is the same as the two simple subscription handlers up at the top.

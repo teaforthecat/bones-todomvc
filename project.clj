@@ -4,14 +4,22 @@
                  [reagent "0.6.0-rc"]
                  [re-frame "0.9.0"]
                  [binaryage/devtools "0.8.1"]
-                 [secretary "1.2.3"]]
+                 [secretary "1.2.3"]
+
+                 ;; [bones/editable "0.1.0"]
+
+                 ]
 
   :plugins [[lein-cljsbuild "1.1.4"]
             [lein-figwheel "0.5.6"]]
 
   :hooks [leiningen.cljsbuild]
 
-  :profiles {:dev  {:cljsbuild
+  :profiles {:dev  {:dependencies [[binaryage/devtools "0.8.3"]
+                                   [figwheel-sidecar "0.5.6"]
+                                   [com.cemerick/piggieback "0.2.1"]
+                                   ]
+                    :cljsbuild
                     {:builds {:client {:compiler {:asset-path           "js"
                                                   :optimizations        :none
                                                   :source-map           true
@@ -25,6 +33,7 @@
                                                   :pretty-print  false}}}}}}
 
   :figwheel {:server-port 3450
+             :nrepl-port  3500
              :repl        true}
 
 

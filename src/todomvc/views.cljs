@@ -1,6 +1,8 @@
 (ns todomvc.views
   (:require [reagent.core  :as reagent]
-            [re-frame.core :refer [subscribe dispatch]]))
+            [re-frame.core :refer [subscribe dispatch]]
+            [bones.editable :as e]
+            [cljs.spec :as s]))
 
 
 (defn todo-input [{:keys [title on-save on-stop]}]
@@ -46,6 +48,37 @@
              :on-save #(dispatch [:save id %])
              :on-stop #(reset! editing false)}])])))
 
+(defn e-todo-item
+  [todo]
+  (let [id (get-in todo [:inputs :id])
+        todo-form (subscribe [:editable :todos id])]
+    (fn []
+      (let [{:keys [inputs errors state]} @todo-form ;; this will redraw the whole component on every character typed
+            stop #(dispatch (e/editable-reset :todos id (:reset state)))
+            save #(dispatch [:request/command :todos id])]
+        [:li {:class (str (when (:done inputs) "completed ")
+                          (when (:editing state) "editing"))}
+         [:div.view
+          [:input.toggle
+           {:type "checkbox"
+            :checked (:done inputs)
+            :on-change #(dispatch [:editable :todos id :inputs :done (-> % .-target .-value)])}]
+          [:label
+           {:on-double-click #(dispatch [:editable
+                                         [:editable :todos id :state :reset inputs]
+                                         [:editable :todos id :state :editing true]])}
+           (:todo inputs)]
+          [:button.destroy
+           {:on-click #(dispatch [:request/command :delete-todo {:id id}])}]]
+         (when (:editing state)
+           [:input {:id (str (:id inputs) "-id")
+                    :value (:todo inputs)
+                    :on-change #(dispatch [:editable :todos id :inputs :todo (-> % .-target .-value)])
+                    :on-key-down #(case (.-which %)
+                                    13 (save)
+                                    27 (stop)
+                                    nil)}]
+           )]))))
 
 (defn task-list
   []
@@ -63,6 +96,23 @@
           (for [todo  visible-todos]
             ^{:key (:id todo)} [todo-item todo])]]))
 
+(defn e-task-list
+  []
+  (let [visible-todos (subscribe [:visible-todos])
+        all-complete? (subscribe [:all-complete?])]
+    (fn []
+      [:section#main
+       [:input#toggle-all
+        {:type "checkbox"
+         :checked @all-complete?
+         :on-change #(dispatch [:complete-all-toggle (not @all-complete?)])}]
+       [:label
+        {:for "toggle-all"}
+        "Mark all as complete"]
+       [:ul#todo-list
+        (for [todo @visible-todos]
+          ;;TODO: oh noes remove :new here
+          ^{:key (or (get-in todo [:inputs :id]) :new)} [e-todo-item todo])]])))
 
 (defn footer-controls
   []
@@ -93,13 +143,45 @@
        :on-save #(dispatch [:add-todo %])}]])
 
 
+(defn e-task-entry []
+  (let [new-todo (subscribe [:editable :todos :new])
+        stop #(dispatch (e/editable-reset :todos :new (:defaults @new-todo)))
+        ;; do defaults differently I think
+        save #(dispatch [:request/command :todos :new {:tap {:defaults (:defaults @new-todo)}}])]
+    (fn []
+      [:input {:id "new-todo"
+               :placeholder "What needs to be done?"
+               :value (get-in @new-todo [:inputs :todo])
+               :on-change #(dispatch [:editable :todos :new :inputs :todo (-> % .-target .-value)])
+               :auto-focus true
+               ;; :on-blur save ;; on-blur will fire when switching windows so we won't use it
+               :on-key-down #(case (.-which %)
+                               13 (save)
+                               27 (stop)
+                               nil)}])))
+
+(defmethod e/handler [:response/command 200]
+  [{:keys [db]} [channel response status tap]]
+  (let [{:keys [form-type identifier]} tap
+        {:keys [id]} (:args response)]
+    {:dispatch (e/editable-response form-type identifier response)
+     :db (assoc-in db [:editable form-type id :inputs] (:args response))}))
+
+(comment
+
+  @re-frame.db/app-db
+
+  )
+
 (defn todo-app
   []
   [:div
    [:section#todoapp
-    [task-entry]
-    (when (seq @(subscribe [:todos]))
-      [task-list])
+    [:header#header
+     [:h1 "todos"]
+     [e-task-entry]]
+    (when (seq @(subscribe [:editable :todos]))
+      [e-task-list])
     [footer-controls]]
    [:footer#info
     [:p "Double-click to edit a todo"]]])

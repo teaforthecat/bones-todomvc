@@ -1,9 +1,11 @@
 (ns todomvc.events
   (:require
-    [todomvc.db    :refer [default-value todos->local-store]]
-    [re-frame.core :refer [reg-event-db reg-event-fx inject-cofx path trim-v
-                           after debug]]
-    [cljs.spec     :as s]))
+   [todomvc.db :as db :refer [default-value todos->local-store]]
+   [re-frame.core :refer [reg-event-db reg-event-fx inject-cofx path trim-v
+                          dispatch
+                          after debug]]
+   [bones.editable :as e]
+   [cljs.spec     :as s]))
 
 
 ;; -- Interceptors --------------------------------------------------------------
@@ -46,6 +48,23 @@
   ((fnil inc 0) (last (keys todos))))
 
 
+
+;; -- Client --
+(defrecord TestClient []
+  e/Client
+  (login   [client args tap]
+    (dispatch [:response/login {} 200 tap]))
+  (logout  [client tap]
+    (dispatch [:response/logout {} 200 tap]))
+  (command [client cmd args tap]
+    (dispatch [:response/command {:args (merge (:defaults tap) ;;TODO: on new only, maybe
+                                               {:id (random-uuid)}
+                                               args ;; will override :id
+                                               )} 200 tap]))
+  (query   [client args tap]
+    (dispatch [:response/query {} 200 tap])))
+
+
 ;; -- Event Handlers ----------------------------------------------------------
 
 ;; usage:  (dispatch [:initialise-db])
@@ -54,7 +73,12 @@
   [(inject-cofx :local-store-todos)  ;; obtain todos from localstore
    check-spec-interceptor]                                  ;; after the event handler runs, check that app-db matches the spec
   (fn [{:keys [db local-store-todos]} _]                    ;; the handler being registered
-    {:db (assoc default-value :todos local-store-todos)}))  ;; all hail the new state
+
+    ;; TODO: generate responses
+    (let [client (TestClient.)]
+      (e/set-client client)
+      {:db (assoc default-value
+                  :todos local-store-todos)})))  ;; all hail the new state
 
 
 ;; usage:  (dispatch [:set-showing  :active])

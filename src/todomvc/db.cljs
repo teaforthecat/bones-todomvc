@@ -32,7 +32,32 @@
     :active                                                 ;; only todos whose :done is false
     :done                                                   ;; only todos whose :done is true
     })
-(s/def ::db (s/keys :req-un [::todos ::showing]))
+
+;; start editable
+(s/def ::inputs map?)
+(s/def ::errors map?)
+(s/def ::state map?)
+(s/def ::defaults map?)
+(s/def ::response map?)
+(s/def ::formable (s/keys :opt-un [::inputs ::errors ::state ::response ::defaults]))
+(s/def ::unique-thing-id (s/or :s string? :k keyword? :i integer? :u uuid?))
+(s/def ::identifier (s/every-kv ::unique-thing-id ::formable))
+(s/def ::form-type (s/or :s string? :k keyword? :i integer?))
+(s/def ::editable (s/nilable (s/every-kv ::form-type ::identifier )))
+
+(comment
+  (s/exercise ::unique-thing-id)
+  ;; top level is nilable so no data is required to start
+  ;; goes like this:
+  ;; get-in db [editable form-type identifier :inputs]
+  ;; get-in db [:editable :x :y :inputs :z]
+  (s/conform ::editable {:x {:y {:inputs {:z 123}}}})
+  (s/explain ::editable {:x {:y nil}})
+
+)
+;; end editable
+
+(s/def ::db (s/keys :req-un [::todos ::showing] :opt-un [::editable]))
 
 ;; -- Default app-db Value  ---------------------------------------------------
 ;;
@@ -43,7 +68,8 @@
 
 (def default-value                                          ;; what gets put into app-db by default.
   {:todos   (sorted-map)                                    ;; an empty list of todos. Use the (int) :id as the key
-   :showing :all})                                          ;; show all todos
+   :showing :all
+   :editable {:todos {:new {:defaults {:active true :done false}}}}})                                          ;; show all todos
 
 
 ;; -- Local Storage  ----------------------------------------------------------

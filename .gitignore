@@ -1,1 +1,7 @@
 resources/public/js
+/figwheel_server.log
+/checkouts
+/target
+/target
+/target
+/.nrepl-port
