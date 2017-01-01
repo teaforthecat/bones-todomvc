@@ -4,57 +4,23 @@
             [bones.editable :as e]
             [cljs.spec :as s]))
 
-
-(defn todo-input [{:keys [title on-save on-stop]}]
-  (let [val (reagent/atom title)
-        stop #(do (reset! val "")
-                  (when on-stop (on-stop)))
-        save #(let [v (-> @val str clojure.string/trim)]
-               (when (seq v) (on-save v))
-               (stop))]
-    (fn [props]
-      [:input (merge props
-                     {:type "text"
-                      :value @val
-                      :auto-focus true
-                      :on-blur save
-                      :on-change #(reset! val (-> % .-target .-value))
-                      :on-key-down #(case (.-which %)
-                                     13 (save)
-                                     27 (stop)
-                                     nil)})])))
-
+(defn detect-controls [{:keys [enter escape]}]
+  (fn [keypress]
+    (case (.-which keypress)
+      13 (enter)
+      ;; chrome won't fire 27, so use on-blur instead
+      27 (escape)
+      nil)))
 
 (defn todo-item
-  []
-  (let [editing (reagent/atom false)]
-    (fn [{:keys [id done title]}]
-      [:li {:class (str (when done "completed ")
-                        (when @editing "editing"))}
-        [:div.view
-          [:input.toggle
-            {:type "checkbox"
-             :checked done
-             :on-change #(dispatch [:toggle-done id])}]
-          [:label
-            {:on-double-click #(reset! editing true)}
-            title]
-          [:button.destroy
-            {:on-click #(dispatch [:delete-todo id])}]]
-        (when @editing
-          [todo-input
-            {:class "edit"
-             :title title
-             :on-save #(dispatch [:save id %])
-             :on-stop #(reset! editing false)}])])))
-
-(defn e-todo-item
   [todo]
   (let [id (get-in todo [:inputs :id])
         todo-form (subscribe [:editable :todos id])]
     (fn []
       (let [{:keys [inputs errors state]} @todo-form ;; this will redraw the whole component on every character typed
             stop #(dispatch (e/editable-reset :todos id (:reset state)))
+            ;; editing a completed tasks makes it incomplete automatically
+            incomplete #(dispatch [:editable :todos id :inputs :done false])
             save #(dispatch [:request/command :todos id])]
         [:li {:class (str (when (:done inputs) "completed ")
                           (when (:editing state) "editing"))}
@@ -62,41 +28,26 @@
           [:input.toggle
            {:type "checkbox"
             :checked (:done inputs)
-            :on-change #(dispatch [:editable :todos id :inputs :done (-> % .-target .-value)])}]
+            :on-change #(dispatch [:editable :todos id :inputs :done (not (:done inputs))])}]
           [:label
            {:on-double-click #(dispatch [:editable
                                          [:editable :todos id :state :reset inputs]
                                          [:editable :todos id :state :editing true]])}
            (:todo inputs)]
           [:button.destroy
-           {:on-click #(dispatch [:request/command :delete-todo {:id id}])}]]
+           {:on-click #(dispatch [:request/command :todos id {:command :delete-todo}])}]]
          (when (:editing state)
            [:input {:id (str (:id inputs) "-id")
+                    :class "edit"
                     :value (:todo inputs)
                     :on-change #(dispatch [:editable :todos id :inputs :todo (-> % .-target .-value)])
-                    :on-key-down #(case (.-which %)
-                                    13 (save)
-                                    27 (stop)
-                                    nil)}]
+
+                    :on-blur stop
+                    :on-key-down (detect-controls {:enter #(do (incomplete) (save))
+                                                   :escape stop})}]
            )]))))
 
 (defn task-list
-  []
-  (let [visible-todos @(subscribe [:visible-todos])
-        all-complete? @(subscribe [:all-complete?])]
-      [:section#main
-        [:input#toggle-all
-          {:type "checkbox"
-           :checked all-complete?
-           :on-change #(dispatch [:complete-all-toggle (not all-complete?)])}]
-        [:label
-          {:for "toggle-all"}
-          "Mark all as complete"]
-        [:ul#todo-list
-          (for [todo  visible-todos]
-            ^{:key (:id todo)} [todo-item todo])]]))
-
-(defn e-task-list
   []
   (let [visible-todos (subscribe [:visible-todos])
         all-complete? (subscribe [:all-complete?])]
@@ -112,7 +63,7 @@
        [:ul#todo-list
         (for [todo @visible-todos]
           ;;TODO: oh noes remove :new here
-          ^{:key (or (get-in todo [:inputs :id]) :new)} [e-todo-item todo])]])))
+          ^{:key (or (get-in todo [:inputs :id]) :new)} [todo-item todo])]])))
 
 (defn footer-controls
   []
@@ -132,18 +83,7 @@
        [:button#clear-completed {:on-click #(dispatch [:clear-completed])}
         "Clear completed"])]))
 
-
-(defn task-entry
-  []
-  [:header#header
-    [:h1 "todos"]
-    [todo-input
-      {:id "new-todo"
-       :placeholder "What needs to be done?"
-       :on-save #(dispatch [:add-todo %])}]])
-
-
-(defn e-task-entry []
+(defn task-entry []
   (let [new-todo (subscribe [:editable :todos :new])
         stop #(dispatch (e/editable-reset :todos :new (:defaults @new-todo)))
         ;; do defaults differently I think
@@ -154,34 +94,43 @@
                :value (get-in @new-todo [:inputs :todo])
                :on-change #(dispatch [:editable :todos :new :inputs :todo (-> % .-target .-value)])
                :auto-focus true
-               ;; :on-blur save ;; on-blur will fire when switching windows so we won't use it
-               :on-key-down #(case (.-which %)
-                               13 (save)
-                               27 (stop)
-                               nil)}])))
-
-(defmethod e/handler [:response/command 200]
-  [{:keys [db]} [channel response status tap]]
-  (let [{:keys [form-type identifier]} tap
-        {:keys [id]} (:args response)]
-    {:dispatch (e/editable-response form-type identifier response)
-     :db (assoc-in db [:editable form-type id :inputs] (:args response))}))
-
-(comment
-
-  @re-frame.db/app-db
-
-  )
-
+               :on-blur stop
+               :on-key-down (detect-controls {:enter save
+                                              :escape stop})}])))
 (defn todo-app
   []
   [:div
    [:section#todoapp
     [:header#header
      [:h1 "todos"]
-     [e-task-entry]]
+     [task-entry]]
     (when (seq @(subscribe [:editable :todos]))
-      [e-task-list])
+      [task-list])
     [footer-controls]]
    [:footer#info
     [:p "Double-click to edit a todo"]]])
+
+
+(defmethod e/handler [:response/command 200]
+  [{:keys [db]} [channel response status tap]]
+  (let [{:keys [form-type identifier defaults]} tap
+        {:keys [command args]} response
+        ;; reset the inputs from the server? maybe.
+        ;; reset the inputs for the new form to the defaults? definitely.
+        inputs (if (= :new identifier) defaults args)
+        ;; this may be the new id from the server
+        {:keys [id]} args]
+    (condp = command
+      :delete-todo
+      {:db (update-in db [:editable form-type] dissoc identifier)}
+      :todos
+      {:dispatch (e/editable-response form-type identifier response inputs)
+       ;; upsert inputs
+       :db (assoc-in db [:editable form-type id :inputs] args)})))
+
+
+(comment
+
+  @re-frame.db/app-db
+
+  )

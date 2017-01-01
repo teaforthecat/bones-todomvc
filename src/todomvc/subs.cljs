@@ -92,8 +92,8 @@
   ;; computation function
   (fn [[todos showing] _]   ;; that 1st parameter is a 2-vector of values
     (let [filter-fn (case showing
-                      :active (complement :done)
-                      :done   :done
+                      :active (complement (comp :done :inputs))
+                      :done   (comp :done :inputs)
                       :all    identity)]
       (filter filter-fn todos))))
 
@@ -142,7 +142,16 @@
   :completed-count
   :<- [:todos]
   (fn [todos _]
-    (count (filter :done todos))))
+    (count (filter (comp :done :inputs) todos))))
+
+(comment
+
+  (count
+   (filter (comp :done :inputs)
+           @(subscribe [:todos])))
+
+  @(subscribe [:completed-count])
+  )
 
 (reg-sub
   :footer-counts

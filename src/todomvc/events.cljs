@@ -57,10 +57,15 @@
   (logout  [client tap]
     (dispatch [:response/logout {} 200 tap]))
   (command [client cmd args tap]
-    (dispatch [:response/command {:args (merge (:defaults tap) ;;TODO: on new only, maybe
-                                               {:id (random-uuid)}
-                                               args ;; will override :id
-                                               )} 200 tap]))
+    (condp = cmd
+      :delete-todo
+      (dispatch [:response/command {:args args :command cmd} 200 tap])
+      :todos
+      (dispatch [:response/command {:args (merge (:defaults tap) ;;TODO: on new only, maybe
+                                                 {:id (random-uuid)}
+                                                 args ;; will override :id
+                                                 )
+                                    :command cmd} 200 tap])))
   (query   [client args tap]
     (dispatch [:response/query {} 200 tap])))
 
