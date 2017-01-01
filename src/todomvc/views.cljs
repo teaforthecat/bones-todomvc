@@ -62,8 +62,7 @@
         "Mark all as complete"]
        [:ul#todo-list
         (for [todo @visible-todos]
-          ;;TODO: oh noes remove :new here
-          ^{:key (or (get-in todo [:inputs :id]) :new)} [todo-item todo])]])))
+          ^{:key ((comp :id :inputs) todo)} [todo-item todo])]])))
 
 (defn footer-controls
   []
