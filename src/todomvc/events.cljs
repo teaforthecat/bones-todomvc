@@ -1,4 +1,5 @@
 (ns todomvc.events
+  (:require-macros [cljs.core.async.macros :refer [go]])
   (:require
    [todomvc.db :as db :refer [default-value todos->local-store]]
    [re-frame.core :refer [reg-event-db reg-event-fx inject-cofx path trim-v
@@ -17,10 +18,6 @@
   (when-not (s/valid? a-spec db)
     (throw (ex-info (str "spec check failed: " (s/explain-str a-spec db)) {}))))
 
-;; Event handlers change state, that's their job. But what happens if there's
-;; a bug which corrupts app state in some subtle way? This interceptor is run after
-;; each event handler has finished, and it checks app-db against a spec.  This
-;; helps us detect event handler bugs early.
 (def check-spec-interceptor (after (partial check-and-throw :todomvc.db/db)))
 
 ;; this interceptor stores todos into local storage
@@ -49,27 +46,6 @@
 
 
 
-;; -- Client --
-(defrecord TestClient []
-  e/Client
-  (login   [client args tap]
-    (dispatch [:response/login {} 200 tap]))
-  (logout  [client tap]
-    (dispatch [:response/logout {} 200 tap]))
-  (command [client cmd args tap]
-    (condp = cmd
-      :delete-todo
-      (dispatch [:response/command {:args args :command cmd} 200 tap])
-      :todos
-      (dispatch [:response/command {:args (merge (:defaults tap) ;;TODO: on new only, maybe
-                                                 {:id (random-uuid)}
-                                                 args ;; will override :id
-                                                 )
-                                    :command cmd} 200 tap])))
-  (query   [client args tap]
-    (dispatch [:response/query {} 200 tap])))
-
-
 ;; -- Event Handlers ----------------------------------------------------------
 
 ;; usage:  (dispatch [:initialise-db])
@@ -79,82 +55,61 @@
    check-spec-interceptor]                                  ;; after the event handler runs, check that app-db matches the spec
   (fn [{:keys [db local-store-todos]} _]                    ;; the handler being registered
 
-    ;; TODO: generate responses
-    (let [client (TestClient.)]
+    (let [client (e/LocalStorage. "bones")]
+      ;; this is the configuration of the bones.editable library
       (e/set-client client)
-      {:db (assoc default-value
-                  :todos local-store-todos)})))  ;; all hail the new state
+      (e/query client {:form-type "todos"} {})
+      {:db default-value}
+      )))  ;; all hail the new state
 
+(defmethod e/handler [:response/query 200]
+  [{:keys [db]} [channel response status tap]]
+  {:db (update-in db [:editable :todos] merge (:results response))})
 
 ;; usage:  (dispatch [:set-showing  :active])
 (reg-event-db                     ;; this handler changes the todo filter
   :set-showing                    ;; event-id
 
   ;; this chain of two interceptors wrap the handler
-  [check-spec-interceptor (path :showing) trim-v]
-
-  ;; The event handler
-  ;; Because of the path interceptor above, the 1st parameter to
-  ;; the handler below won't be the entire 'db', and instead will
-  ;; be the value at a certain path within db, namely :showing.
-  ;; Also, the use of the 'trim-v' interceptor means we can omit
-  ;; the leading underscore from the 2nd parameter (event vector).
+  [check-spec-interceptor (path :editable :todos :_meta :filter) trim-v]
   (fn [old-keyword [new-filter-kw]]  ;; handler
     new-filter-kw))                  ;; return new state for the path
 
 
-;; usage:  (dispatch [:add-todo  "Finish comments"])
-(reg-event-db                     ;; given the text, create a new todo
-  :add-todo
-
-  ;; The standard set of interceptors, defined above, which we
-  ;; apply to all todos-modifiing event handlers. Looks after
-  ;; writing todos to local store, etc.
-  todo-interceptors
-
-  ;; The event handler function.
-  ;; The "path" interceptor in `todo-interceptors` means 1st parameter is :todos
-  (fn [todos [text]]
-    (let [id (allocate-next-id todos)]
-      (assoc todos id {:id id :title text :done false}))))
-
-
-(reg-event-db
-  :toggle-done
-  todo-interceptors
-  (fn [todos [id]]
-    (update-in todos [id :done] not)))
-
-
-(reg-event-db
-  :save
-  todo-interceptors
-  (fn [todos [id title]]
-    (assoc-in todos [id :title] title)))
-
-
-(reg-event-db
-  :delete-todo
-  todo-interceptors
-  (fn [todos [id]]
-    (dissoc todos id)))
-
-
-(reg-event-db
+(reg-event-fx
   :clear-completed
-  todo-interceptors
-  (fn [todos _]
-    (->> (vals todos)                ;; find the ids of all todos where :done is true
-         (filter :done)
-         (map :id)
-         (reduce dissoc todos))))    ;; now delete these ids
+  [check-spec-interceptor debug]
+  (fn [db _]
+    (let [;; find the ids of all todos where :done is true
+          todos (get-in db [:editable :todos])
+          ids (->> (vals todos)
+                   (filter (comp :done :inputs))
+                   (map (comp :id :inputs))
+                   )]
+      (println "ids")
+      (println ids)
+      (if (first ids)
+        ;; return db immediately, unchanged
+        {:dispatch [:request/command :todos (first ids) {:command :todos/delete}]
+         :db db}
+        {:db db}))))
 
+
+(comment
+
+  (first
+   (->> (vals (get-in @re-frame.db/app-db [:editable :todos]) )
+        (filter (comp :done :inputs))
+        (map (comp :id :inputs))
+        ))
+
+  )
 
 (reg-event-db
   :complete-all-toggle
-  todo-interceptors
+  [check-spec-interceptor (path :editable :todos) trim-v]
   (fn [todos _]
-    (let [new-done (not-every? :done (vals todos))]   ;; work out: toggle true or false?
-      (reduce #(assoc-in %1 [%2 :done] new-done)
+    (let [new-done (not-every? (comp :done :inputs) (vals todos))]   ;; work out: toggle true or false?
+      (reduce #(assoc-in %1 [%2 :inputs :done] new-done)
               todos
               (keys todos)))))

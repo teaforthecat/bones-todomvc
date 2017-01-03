@@ -23,8 +23,10 @@
 ;;   - https://github.com/juxt/bidi
 ;; We don't have a strong opinion.
 ;;
-(defroute "/" [] (dispatch [:set-showing :all]))
-(defroute "/:filter" [filter] (dispatch [:set-showing (keyword filter)]))
+(secretary/set-config! :prefix "#")
+(defroute "/" [] (dispatch [:editable :todos :_meta :filter nil]))
+;; (defroute "/:filter" [filter] (dispatch [:set-showing (keyword filter)]))
+(defroute "/:filter" [filter] (dispatch [:editable :todos :_meta :filter (keyword filter)]))
 
 (def history
   (doto (History.)
