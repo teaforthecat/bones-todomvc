@@ -1,6 +1,6 @@
 (ns todomvc.views
   (:require [reagent.core  :as reagent]
-            [re-frame.core :refer [subscribe dispatch]]
+            [re-frame.core :refer [subscribe dispatch dispatch-sync]]
             [bones.editable :as e]
             [cljs.spec :as s]))
 
@@ -12,42 +12,60 @@
       27 (escape)
       nil)))
 
+(defn field [form-type identifier attr html-attrs]
+  (let [path [:editable form-type identifier :inputs attr]
+        value (subscribe path)
+        input-type (or (:input-type html-attrs) :input)
+        value-attr (or (:value-attr html-attrs) :value)
+        opts (dissoc html-attrs :value-attr :input-type)]
+    (fn []
+      [input-type (merge {:on-change #(dispatch-sync (conj path (-> % .-target .-value)))
+                          value-attr @value}
+                         opts)])))
+
+(defn checkbox [form-type identifier attr & {:as html-attrs}]
+  (field form-type identifier attr (merge {:type "checkbox"
+                                           :value-attr :checked}
+                                          html-attrs)))
+
+(defn input [form-type identifier attr & {:as html-attrs}]
+  (field form-type identifier attr html-attrs))
+
 (defn todo-item
   [todo]
   (let [id (get-in todo [:inputs :id])
-        todo-form (subscribe [:editable :todos id])]
+        inputs (subscribe [:editable :todos id :inputs])
+        done (subscribe [:editable :todos id :inputs :done])
+        label (subscribe [:editable :todos id :inputs :todo])
+        errors (subscribe [:editable :todos id :errors])
+        state (subscribe [:editable :todos id :state])
+        reset #(dispatch (e/editable-reset :todos id (:reset @state)))
+        incomplete #(dispatch [:editable :todos id :inputs :done false])
+        toggle #(dispatch [:editable :todos id :inputs :done (not %)])
+        save #(dispatch [:request/command :todos id {:command :todos/update}])
+        delete #(dispatch [:request/command :todos id {:command :todos/delete}])
+        edit #(dispatch [:editable
+                         [:editable :todos id :state :reset @inputs]
+                         [:editable :todos id :state :editing true]])]
     (fn []
-      (let [{:keys [inputs errors state]} @todo-form ;; this will redraw the whole component on every character typed
-            stop #(dispatch (e/editable-reset :todos id (:reset state)))
-            incomplete #(dispatch [:editable :todos id :inputs :done false])
-            toggle #(dispatch [:editable :todos id :inputs :done (not (:done inputs))])
-            save #(dispatch [:request/command :todos id {:command :todos/update}])]
-        [:li {:class (str (when (:done inputs) "completed ")
-                          (when (:editing state) "editing"))}
-         [:div.view
-          [:input.toggle
-           {:type "checkbox"
-            :checked (:done inputs)
-            :on-change #(do (toggle) (save))}]
-          [:label
-           {:on-double-click #(dispatch [:editable
-                                         ;; store the current values in :reset, to be used in the `stop' fn
-                                         [:editable :todos id :state :reset inputs]
-                                         [:editable :todos id :state :editing true]])}
-           (:todo inputs)]
-          [:button.destroy
-           {:on-click #(dispatch [:request/command :todos id {:command :todos/delete}])}]]
-         (when (:editing state)
-           [:input {:id (str (:id inputs) "-id")
-                    :class "edit"
-                    :value (:todo inputs)
-                    :on-change #(dispatch [:editable :todos id :inputs :todo (-> % .-target .-value)])
-
-                    :on-blur stop
-                    ;; editing a completed tasks makes it incomplete automatically
-                    :on-key-down (detect-controls {:enter #(do (incomplete) (save))
-                                                   :escape stop})}]
-           )]))))
+      [:li {:class (str (when @done "completed ")
+                        (when (:editing @state) "editing"))}
+       [:div.view
+        [checkbox :todos id :done
+         :class "toggle"
+         :on-change #(do (toggle @done) (save))]
+        [:label
+         {:on-double-click edit}
+         @label]
+        [:button.destroy
+         {:on-click delete}]]
+       (when (:editing @state)
+         [input :todos id :todo
+          :id (str id "-id")
+          :class "edit"
+          :on-blur reset
+          :on-key-down (detect-controls {:enter #(do (incomplete) (save))
+                                         :escape reset})])])))
 
 (defn task-list
   []
@@ -92,14 +110,13 @@
         save #(dispatch [:request/command :todos :new {:command :todos/new
                                                        :tap {:defaults (:defaults @new-todo)}}])]
     (fn []
-      [:input {:id "new-todo"
-               :placeholder "What needs to be done?"
-               :value (get-in @new-todo [:inputs :todo])
-               :on-change #(dispatch [:editable :todos :new :inputs :todo (-> % .-target .-value)])
-               :auto-focus true
-               :on-blur stop
-               :on-key-down (detect-controls {:enter save
-                                              :escape stop})}])))
+      [input :todos :new :todo
+       :id "new-todo"
+       :placeholder "What needs to be done?"
+       :auto-focus true
+       :on-blur stop
+       :on-key-down (detect-controls {:enter save
+                                      :escape stop})])))
 
 (defn todo-app
   []
