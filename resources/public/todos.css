@@ -170,6 +170,16 @@ label[for='toggle-all'] {
 	margin: 0 0 0 43px;
 }
 
+/* use this to demonstrate the pending state while a request is happening */
+#todo-list li.black {
+    background-color: black;
+}
+
+/* use this to demonstrate the pending state while a request is happening */
+#todo-list li.black input{
+    background-color: black;
+}
+
 #todo-list li.editing .view {
 	display: none;
 }
