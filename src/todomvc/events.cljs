@@ -54,17 +54,12 @@
   [(inject-cofx :local-store-todos)  ;; obtain todos from localstore
    check-spec-interceptor]                                  ;; after the event handler runs, check that app-db matches the spec
   (fn [{:keys [db local-store-todos]} _]                    ;; the handler being registered
-
     (let [client (e/LocalStorage. "bones")]
       ;; this is the configuration of the bones.editable library
       (e/set-client client)
       (e/query client {:form-type "todos"} {})
       {:db default-value}
       )))  ;; all hail the new state
-
-(defmethod e/handler [:response/query 200]
-  [{:keys [db]} [channel response status tap]]
-  {:db (update-in db [:editable :todos] merge (:results response))})
 
 ;; usage:  (dispatch [:set-showing  :active])
 (reg-event-db                     ;; this handler changes the todo filter
@@ -78,19 +73,18 @@
 
 (reg-event-fx
   :clear-completed
-  [check-spec-interceptor debug]
-  (fn [db _]
+  ;; [check-spec-interceptor debug]
+  [debug]
+  (fn [{:keys [db]} _]
     (let [;; find the ids of all todos where :done is true
           todos (get-in db [:editable :todos])
           ids (->> (vals todos)
                    (filter (comp :done :inputs))
                    (map (comp :id :inputs))
                    )]
-      (println "ids")
-      (println ids)
-      (if (first ids)
+      (if (not-empty ids)
         ;; return db immediately, unchanged
-        {:dispatch [:request/command :todos (first ids) {:command :todos/delete}]
+        {:dispatch [:request/command :todos/delete-many {:ids ids} {:solo true}]
          :db db}
         {:db db}))))
 

@@ -116,33 +116,35 @@
         {:keys [command args]} response
         ;; - this is the new or existing id
         {:keys [id]} args]
-    (let [commandspace (namespace command)
-          action (name command)]
-      (if (and commandspace (contains? args :id))
-        ;; apply conventions
-        (condp = action
-          "new"
-          ;; reset new form to defaults
-          ;; insert new thing with id into db
-          {:dispatch (e/editable-response form-type identifier response defaults)
-           :db (assoc-in db [:editable form-type id :inputs] args)}
-          "update"
-          (if (:solo tap)
-            ;; merge :args into :inputs
-            {:db(update-in db [:editable form-type id :inputs] merge args)
-             :dispatch [:editable form-type id :state :pending false]}
-            ;; reset :inputs to :args
-            {:dispatch (e/editable-response form-type identifier response args)})
-          "delete"
-          {:db (update-in db [:editable form-type] dissoc identifier)}
-          )
-        ;; this will probably need to be overridden somehow
-        ;; maybe this should be another multimethod
-        {:dispatch (e/editable-response form-type identifier response)}))))
+
+    ;; apply conventions
+    (condp = command
+      :todos/new
+      ;; reset new form to defaults
+      ;; insert new thing with id into db
+      {:dispatch (e/editable-response form-type identifier response defaults)
+       :db (assoc-in db [:editable form-type id :inputs] (merge defaults args))}
+      :todos/update
+      ;; merge :args into :inputs
+      {:db (update-in db [:editable form-type id :inputs] merge args)
+       :dispatch [:editable form-type id :state :pending false]}
+      ;; reset :inputs to :args
+      ;; {:dispatch (e/editable-response form-type identifier response args)}
+      :todos/delete
+      {:db (update-in db [:editable form-type] dissoc identifier)}
+      :todos/delete-many
+      {:db (update-in db [:editable form-type] #(reduce dissoc % (:ids args)))}
+      )
+    ))
+
+(defmethod e/handler [:response/query 200]
+  [{:keys [db]} [channel response status tap]]
+  {:db (update-in db [:editable :todos] merge (:results response))})
+
 
 
 (comment
 
-  @re-frame.db/app-db
+  (get-in   @re-frame.db/app-db [:editable :todos])
 
   )
