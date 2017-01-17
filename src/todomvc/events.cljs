@@ -8,10 +8,6 @@
    [bones.editable :as e]
    [cljs.spec     :as s]))
 
-
-;; -- Interceptors --------------------------------------------------------------
-;;
-
 (defn check-and-throw
   "throw an exception if db doesn't match the spec"
   [a-spec db]
@@ -20,40 +16,10 @@
 
 (def check-spec-interceptor (after (partial check-and-throw :todomvc.db/db)))
 
-;; this interceptor stores todos into local storage
-;; we attach it to each event handler which could update todos
-(def ->local-store (after todos->local-store))
-
-;; Each event handler can have its own set of interceptors (middleware)
-;; But we use the same set of interceptors for all event habdlers related
-;; to manipulating todos.
-;; A chain of interceptors is a vector.
-(def todo-interceptors [check-spec-interceptor               ;; ensure the spec is still valid
-                        (path :todos)                        ;; 1st param to handler will be the value from this path
-                        ->local-store                        ;; write todos to localstore
-                        (when ^boolean js/goog.DEBUG debug)  ;; look in your browser console for debug logs
-                        trim-v])                             ;; removes first (event id) element from the event vec
-
-
-;; -- Helpers -----------------------------------------------------------------
-
-(defn allocate-next-id
-  "Returns the next todo id.
-  Assumes todos are sorted.
-  Returns one more than the current largest id."
-  [todos]
-  ((fnil inc 0) (last (keys todos))))
-
-
-
-;; -- Event Handlers ----------------------------------------------------------
-
-;; usage:  (dispatch [:initialise-db])
-(reg-event-fx                     ;; on app startup, create initial state
-  :initialise-db                  ;; event id being handled
-  [(inject-cofx :local-store-todos)  ;; obtain todos from localstore
-   check-spec-interceptor]                                  ;; after the event handler runs, check that app-db matches the spec
-  (fn [{:keys [db local-store-todos]} _]                    ;; the handler being registered
+(reg-event-fx
+  :initialise-db
+  [check-spec-interceptor]
+  (fn [{:keys [db local-store-todos]} _]
     (let [client (e/LocalStorage. "bones")]
       ;; this is the configuration of the bones.editable library
       (e/set-client client)
@@ -61,19 +27,8 @@
       {:db default-value}
       )))  ;; all hail the new state
 
-;; usage:  (dispatch [:set-showing  :active])
-(reg-event-db                     ;; this handler changes the todo filter
-  :set-showing                    ;; event-id
-
-  ;; this chain of two interceptors wrap the handler
-  [check-spec-interceptor (path :editable :todos :_meta :filter) trim-v]
-  (fn [old-keyword [new-filter-kw]]  ;; handler
-    new-filter-kw))                  ;; return new state for the path
-
-
 (reg-event-fx
   :clear-completed
-  ;; [check-spec-interceptor debug]
   [debug]
   (fn [{:keys [db]} _]
     (let [;; find the ids of all todos where :done is true
@@ -84,20 +39,9 @@
                    )]
       (if (not-empty ids)
         ;; return db immediately, unchanged
-        {:dispatch [:request/command :todos/delete-many {:ids ids} {:solo true}]
+        {:dispatch [:request/command :todos/delete-many {:ids ids}]
          :db db}
         {:db db}))))
-
-
-(comment
-
-  (first
-   (->> (vals (get-in @re-frame.db/app-db [:editable :todos]) )
-        (filter (comp :done :inputs))
-        (map (comp :id :inputs))
-        ))
-
-  )
 
 (reg-event-db
   :complete-all-toggle

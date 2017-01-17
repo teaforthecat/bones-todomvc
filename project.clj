@@ -3,7 +3,6 @@
                  [org.clojure/clojurescript "1.9.229"]
                  [reagent "0.6.0-rc"]
                  [re-frame "0.9.0"]
-                 [binaryage/devtools "0.8.1"]
                  [secretary "1.2.3"]
 
                  ;; [bones/editable "0.1.0"]
