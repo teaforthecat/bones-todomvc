@@ -6,6 +6,9 @@
                           dispatch
                           after debug]]
    [bones.editable :as e]
+   [bones.editable.local-storage :as e.ls]
+   [bones.editable.request :as request]
+   [bones.editable.protocols :as p]
    [cljs.spec     :as s]))
 
 (defn check-and-throw
@@ -20,10 +23,10 @@
   :initialise-db
   [check-spec-interceptor]
   (fn [{:keys [db local-store-todos]} _]
-    (let [client (e/LocalStorage. "bones")]
+    (let [client (e.ls/LocalStorage. "bones")]
       ;; this is the configuration of the bones.editable library
-      (e/set-client client)
-      (e/query client {:form-type "todos"} {})
+      (request/set-client client)
+      (p/query client {:form-type "todos"} {})
       {:db default-value}
       )))  ;; all hail the new state
 
