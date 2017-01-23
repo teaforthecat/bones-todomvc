@@ -3,9 +3,8 @@
             [re-frame.core :refer [subscribe dispatch dispatch-sync]]
             [bones.editable :as e]
             [bones.editable.helpers :as h]
-            [bones.editable.forms :as f]
-            [bones.editable.request :as request]
-            [bones.editable.response :as response]
+            ;; [bones.editable.forms :as f]
+            [bones.editable.response :as r]
             [bones.editable.subs :as subs]
             [cljs.spec :as s]))
 
@@ -18,32 +17,32 @@
                 save
                 delete
                 reset
-                edit]} (f/form :todos id)]
+                edit]} (e/form :todos id)]
     (fn []
       [:li {:class (cond-> ""
                      (inputs :done)   (str " completed")
                      (state :pending) (str " pending")
                      (state :editing) (str " editing"))}
        [:div.view
-        [f/checkbox :todos id :done
+        [e/checkbox :todos id :done
          :class "toggle"
          ;; here we rely on the response from the server to update the form
          ;; no merge here means only send these attributes, and only update these
          ;; attributes in the response handler
-         :on-change (save (fn [] {:args {:done (not (inputs :done))}}))]
+         :on-change (save (fn [] {:args {:id id :done (not (inputs :done))}}))]
         [:label
          ;; edit will "toggle" :editing
-         {:on-double-click edit}
+         {:on-double-click (edit :todo)}
          (inputs :todo)]
         [:button.destroy
          {:on-click delete}]]
        (when (state :editing)
          ;; reset and save will "toggle" :editing by clearing state
-         [f/input :todos id :todo
+         [e/input :todos id :todo
           :id (str id "-id")
           :class "edit"
           :on-blur reset
-          :on-key-down (f/detect-controls {:enter (save {:args {:done false}})
+          :on-key-down (e/detect-controls {:enter (save {:args {:done false} :merge [:inputs]})
                                            :escape reset})])])))
 
 (defn task-list
@@ -82,14 +81,14 @@
         "Clear completed"])]))
 
 (defn task-entry []
-  (let [{:keys [reset save]} (f/form :todos :new)]
+  (let [{:keys [reset save]} (e/form :todos :new)]
     (fn []
-      [f/input :todos :new :todo
+      [e/input :todos :new :todo
        :id "new-todo"
        :placeholder "What needs to be done?"
        :auto-focus true
        :on-blur reset
-       :on-key-down (f/detect-controls {:enter (save {:args {} :merge [:inputs :defaults]})
+       :on-key-down (e/detect-controls {:enter (save {:args {} :merge [:inputs :defaults]})
                                         :escape reset})])))
 
 (defn todo-app
@@ -105,7 +104,7 @@
    [:footer#info
     [:p "Double-click to edit a todo"]]])
 
-(defmethod response/handler [:response/command 200]
+(defmethod r/handler [:response/command 200]
   [{:keys [db]} [channel response status tap]]
   (let [
         ;; - extract the info passed from the dispatcher
@@ -114,7 +113,8 @@
         ;; - the defaults are passed from the new dispatcher so we can reset the
         ;;   new form.
         ;; - the defaults may or may not be passed
-        {:keys [command args e-scope]} tap
+        {:keys [e-scope]} tap
+        {:keys [command args]} response
         [_ e-type identifier] e-scope
         ;; this has already happened I think:
         ;; defaults (if (= identifier :new)
@@ -123,7 +123,8 @@
         ;; redundant, but it is nice to close the loop
         ;;{:keys [comma args]} response
         ;; - this is the new or existing id
-        {:keys [id]} args]
+        {:keys [id]} args
+        ]
 
     ;; apply conventions
     (condp = command
@@ -135,15 +136,17 @@
       :todos/update
       ;; merge :args into :inputs
       {:db (update-in db [:editable e-type id :inputs] merge args)
-       :dispatch [:editable e-type id :state :pending false]}
+       :dispatch [:editable
+                  [:editable e-type id :state :pending false]
+                  [:editable e-type id :state :editing nil]]}
       ;; reset :inputs to :args
       ;; {:dispatch (h/editable-response e-type identifier response args)}
       :todos/delete
-      {:db (update-in db [:editable e-type] dissoc identifier)}
+      {:db (update-in db [:editable e-type] dissoc id)}
       :todos/delete-many
       {:db (update-in db [:editable e-type] #(reduce dissoc % (:ids args)))})))
 
-(defmethod response/handler [:response/query 200]
+(defmethod r/handler [:response/query 200]
   [{:keys [db]} [channel response status tap]]
   {:db (update-in db [:editable :todos] merge (:results response))})
 

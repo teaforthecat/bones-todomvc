@@ -5,7 +5,7 @@
                  [re-frame "0.9.0"]
                  [secretary "1.2.3"]
 
-                 ;; [bones/editable "0.1.0"]
+                 ;; [bones/editable "0.1.2"]
 
                  ]
 

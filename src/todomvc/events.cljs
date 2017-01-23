@@ -26,7 +26,7 @@
     (let [client (e.ls/LocalStorage. "bones")]
       ;; this is the configuration of the bones.editable library
       (request/set-client client)
-      (p/query client {:form-type "todos"} {})
+      (p/query client {:e-type "todos"} {})
       {:db default-value}
       )))  ;; all hail the new state
 
@@ -38,8 +38,7 @@
           todos (get-in db [:editable :todos])
           ids (->> (vals todos)
                    (filter (comp :done :inputs))
-                   (map (comp :id :inputs))
-                   )]
+                   (map (comp :id :inputs)))]
       (if (not-empty ids)
         ;; return db immediately, unchanged
         {:dispatch [:request/command :todos/delete-many {:ids ids}]
