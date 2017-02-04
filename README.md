@@ -1,23 +1,22 @@
 # TodoMVC done with re-frame
 
-A [re-frame](https://github.com/Day8/re-frame) implementation of [TodoMVC](http://todomvc.com/).
+[bones.editable](https://github.com/teaforthecat/bones-editable) implementation of [TodoMVC](http://todomvc.com/).
 
+This project was forked/extracted
+from [re-frame](https://github.com/Day8/re-frame) and then
+had [bones.editable](https://github.com/teaforthecat/bones-editable) put on top.
 
 ## Setup And Run
 
 1. Install [Leiningen](http://leiningen.org/)  (plus Java).
 
-2. Get the re-frame repo
+2. Get the project
+
    ```
-   git clone https://github.com/Day8/re-frame.git
+   git clone https://github.com/teaforthecat/bones-todomvc.git
    ```
 
-3. cd to the right example directory
-   ```
-   cd re-frame/examples/todomvc
-   ```
-
-4. Clean build
+3. Clean build
    ```
    lein do clean, figwheel
    ```
@@ -42,29 +41,3 @@ A [re-frame](https://github.com/Day8/re-frame) implementation of [TodoMVC](http:
    ```
 
 
-## Exploring The Code
-
-From the re-frame readme:
-```
-To build a re-frame app, you:
-  - design your app's data structure (data layer)
-  - write and register subscription functions (query layer)
-  - write Reagent component functions (view layer)
-  - write and register event handler functions (control layer and/or state transition layer)
-```
-
-In `src`, there's a matching set of files (each small):
-```
-src
-├── core.cljs         <--- entry point, plus history
-├── db.cljs           <--- data related  (data layer)
-├── subs.cljs         <--- subscription handlers  (query layer)
-├── views.cljs        <--- reagent  components (view layer)
-└── handlers.cljs     <--- event handlers (control/update layer)
-```
-
-## Notes
-
-Various:
- - The [official reagent example](https://github.com/reagent-project/reagent/tree/master/examples/todomvc)
- - Look at the [re-frame Wiki](https://github.com/Day8/re-frame/wiki)

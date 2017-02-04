@@ -4,10 +4,7 @@
                  [reagent "0.6.0-rc"]
                  [re-frame "0.9.0"]
                  [secretary "1.2.3"]
-
-                 ;; [bones/editable "0.1.2"]
-
-                 ]
+                 [bones/editable "0.1.4"]]
 
   :plugins [[lein-cljsbuild "1.1.4"]
             [lein-figwheel "0.5.6"]]

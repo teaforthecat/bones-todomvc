@@ -8,9 +8,13 @@
 
 (reg-sub
   :todos
-  (fn [query-v _]
-    (subscribe [:editable :todos])) ;; returns a single input signal
 
+  ;; signal function
+  ;; returns a single input signal
+  (fn [query-v _]
+    (subscribe [:editable :todos]))
+
+  ;; computation function
   ;; receives the input signal above as first parameter
   (fn [todos query-v _]
     (vals todos)))
@@ -25,7 +29,8 @@
      (subscribe [:showing])])
 
   ;; computation function
-  (fn [[todos showing] _]   ;; that 1st parameter is a 2-vector of values
+  ;; that 1st parameter is a 2-vector of values from above
+  (fn [[todos showing] _]
     (let [filter-fn (case showing
                       :active (complement (comp :done :inputs))
                       :done   (comp :done :inputs)
