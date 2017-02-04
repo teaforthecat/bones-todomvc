@@ -1,4 +1,4 @@
-# TodoMVC done with re-frame
+# TodoMVC done with bones.editable 
 
 [bones.editable](https://github.com/teaforthecat/bones-editable) implementation of [TodoMVC](http://todomvc.com/).
 
@@ -17,12 +17,16 @@ had [bones.editable](https://github.com/teaforthecat/bones-editable) put on top.
    ```
 
 3. Clean build
+
    ```
    lein do clean, figwheel
    ```
 
 5. Run
-   You'll have to wait for step 4 to do its compile, but then:
+
+   You'll have to wait for step 4 to do its compile, but then when you see
+   "Prompt will show when Figwheel connects to your application", then:
+
    ```
    open http://localhost:3450
    ```
